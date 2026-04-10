@@ -1,0 +1,117 @@
+---
+title: "exercise-11"
+format: html
+editor: visual
+---
+
+# Preliminaries
+
+``` {r}
+library(tidyverse)
+library(skimr)
+d <- read_tsv("https://raw.githubusercontent.com/difiore/ada-datasets/main/Mammal_lifehistories_v2.txt")
+d[d == -999] <- NA # removes "-999" values and properly replaces them with "NA"
+skim(d)
+```
+
+``` {r}
+head(d)
+```
+
+The values order, family, Genus, and species are categorical, while mass(g), gestation(mo), newborn(g), weaning(mo), wean mass(g), AFR(mo), max.life(mo), litter size, litters/year, and refs are numeric.
+
+# Challenge
+
+## Step 1
+
+``` {r}
+d[d == -999] <- NA # I already did this part but I'll just put it here again
+```
+
+## Step 2
+
+``` {r}
+d <- d %>%
+  select(-c("litter size", "refs"))
+d <- d %>%
+  mutate(`maxlife(mo)` = `max. life(mo)`, `weanmass(g)` = `wean mass(g)`) %>%
+  select(-c("max. life(mo)", "wean mass(g)"))
+head(d)
+```
+
+## Step 3
+
+``` {r}
+d <- d %>%
+  mutate(across(where(is.numeric) & !c("maxlife(mo)", "weanmass(g)"), log))
+head(d)
+```
+
+## Step 4
+
+``` {r}
+m1 <- lm(data = d, `mass(g)` ~ `gestation(mo)`, na.action = na.exclude)
+relgest <- resid(m1)
+m2 <- lm(data = d, `mass(g)` ~ `weaning(mo)`, na.action = na.exclude)
+relwean <- resid(m2)
+m3 <- lm(data = d, `mass(g)` ~ `AFR(mo)`, na.action = na.exclude)
+relafr <- resid(m3)
+m4 <- lm(data = d, `mass(g)` ~ `maxlife(mo)`, na.action = na.exclude)
+rellife <- resid(m4)
+m5 <- lm(data = d, `mass(g)` ~ `newborn(g)`, na.action = na.exclude)
+relnewbornmass <- resid(m5)
+m6 <- lm(data = d, `mass(g)` ~ `weanmass(g)`, na.action = na.exclude)
+relweaningmass <- resid(m6)
+d <- d %>%
+  mutate(relGest = relgest, relWean = relwean, relAFR = relafr, relLife = rellife, relNewbornMass = relnewbornmass, relWeaningMass = relweaningmass)
+head(d)
+```
+
+## Step 5
+
+``` {r}
+ggplot(d, aes(order, relLife)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+Artiodactyla and Perissodactyla appear to have the highest residual lifespan.
+
+``` {r}
+ggplot(d, aes(order, relNewbornMass)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+Carnivora appears to have the highest residual newborn mass; many more, like Lagomorpha, Perissodactyla, Proboscidea, and Tubulidentata appear to be high in the running as well.
+
+``` {r}
+ggplot(d, aes(order, relWeaningMass)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+Proboscidea, Sirenia, and Perissodactyla appear to have the highest residual weaning mass.
+
+## Step 6
+
+``` {r}
+d_maxlife <- d %>%
+  drop_na(`maxlife(mo)`, `gestation(mo)`, `newborn(g)`, `weaning(mo)`, `weanmass(g)`, `litters/year`, `mass(g)`)
+library(MASS)
+m1 <- lm(data = d_maxlife, `maxlife(mo)` ~ 1)
+s1 <- stepAIC(m1, scope = .~. + `gestation(mo)` + `newborn(g)` + `weaning(mo)` + `weanmass(g)` + `litters/year` + `mass(g)`, direction = "both")
+```
+
+For maxlife(mo), the best overall model is the one containing nearly all predictors (mass(g), weanmass(g), weaning(mo), litters/year, and gestation(mo)). It looks like 6 candidate models (mass(g) + newborn(g), mass(g) + weanmass(g) + newborn(g), mass(g) + weanmass(g) + weaning(mo) + newborn(g), mass(g) + weanmass(g) + weaning(mo) + gestation(mo), mass(g) + weanmass(g) + weaning(mo) + litters/year + newborn(g), and mass(g) + weanmass(g) + weaning(mo) + litters/year + gestation(mo) + newborn(g)) have a delta AIC of 4 or less.
+
+``` {r}
+d_maxafr <- d %>%
+  drop_na(`AFR(mo)`, `gestation(mo)`, `newborn(g)`, `weaning(mo)`, `weanmass(g)`, `litters/year`, `mass(g)`)
+m2 <- lm(data = d_maxafr, `AFR(mo)` ~ 1)
+s2 <- stepAIC(m2, scope = .~. + `gestation(mo)` + `newborn(g)` + `weaning(mo)` + `weanmass(g)` + `litters/year` + `mass(g)`, direction = "both")
+```
+
+For maxAFR(mo), the best overall model is the one containing 4 predictors (litters/year, gestation(mo), mass(g), and weaning(mo)). It looks like 6 candidate models (mass(g) + newborn(g), mass(g) + weanmass(g) + newborn(g), mass(g) + weanmass(g) + weaning(mo) + newborn(g), mass(g) + weanmass(g) + weaning(mo) + gestation(mo), mass(g) + weanmass(g) + weaning(mo) + litters/year + newborn(g), and mass(g) + weanmass(g) + weaning(mo) + litters/year + gestation(mo) + newborn(g)) have a delta AIC of 4 or less. However, I did notice that stepAIC added mass(g) to  AFR(mo) ~ litters/year + gestation(mo) even though the delta AIC for that candidate model was -331.13 - -334.58 = 3.45 < 4, so maybe AFR(mo) ~ litters/year + gestation(mo) should be the best overall model instead.
+
+mass(g), weaning(mo), litters/year, and gestation(mo) appear in both top models (however, if we accept AFR(mo) ~ litters/year + gestation(mo) as the *real* top model for maxAFR(mo), then it's just litters/year and gestation(mo)).
