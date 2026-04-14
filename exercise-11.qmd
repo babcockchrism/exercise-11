@@ -32,10 +32,10 @@ d[d == -999] <- NA # I already did this part but I'll just put it here again
 
 ``` {r}
 d <- d %>%
-  select(-c("litter size", "refs"))
+  dplyr::select(-c("litter size", "refs"))
 d <- d %>%
   mutate(`maxlife(mo)` = `max. life(mo)`, `weanmass(g)` = `wean mass(g)`) %>%
-  select(-c("max. life(mo)", "wean mass(g)"))
+  dplyr::select(!c("max. life(mo)", "wean mass(g)"))
 head(d)
 ```
 
@@ -115,3 +115,148 @@ s2 <- stepAIC(m2, scope = .~. + `gestation(mo)` + `newborn(g)` + `weaning(mo)` +
 For maxAFR(mo), the best overall model is the one containing 4 predictors (litters/year, gestation(mo), mass(g), and weaning(mo)). It looks like 6 candidate models (mass(g) + newborn(g), mass(g) + weanmass(g) + newborn(g), mass(g) + weanmass(g) + weaning(mo) + newborn(g), mass(g) + weanmass(g) + weaning(mo) + gestation(mo), mass(g) + weanmass(g) + weaning(mo) + litters/year + newborn(g), and mass(g) + weanmass(g) + weaning(mo) + litters/year + gestation(mo) + newborn(g)) have a delta AIC of 4 or less. However, I did notice that stepAIC added mass(g) to  AFR(mo) ~ litters/year + gestation(mo) even though the delta AIC for that candidate model was -331.13 - -334.58 = 3.45 < 4, so maybe AFR(mo) ~ litters/year + gestation(mo) should be the best overall model instead.
 
 mass(g), weaning(mo), litters/year, and gestation(mo) appear in both top models (however, if we accept AFR(mo) ~ litters/year + gestation(mo) as the *real* top model for maxAFR(mo), then it's just litters/year and gestation(mo)).
+
+``` {r}
+d_maxlife <- d %>%
+  drop_na(`maxlife(mo)`, `gestation(mo)`, `newborn(g)`, `weaning(mo)`, `weanmass(g)`, `litters/year`, `mass(g)`)
+maxlife0 <- lm(data = d_maxlife, `maxlife(mo)` ~ 1)
+summary(maxlife0)
+```
+
+``` {r}
+add1(maxlife0, scope = .~. + `gestation(mo)` + `newborn(g)` + `weaning(mo)` + `weanmass(g)` + `litters/year` + `mass(g)`, test = "F")
+```
+
+``` {r}
+maxlife1 <- update(maxlife0, formula = .~. + `mass(g)`)
+summary(maxlife1)
+```
+
+``` {r}
+add1(maxlife1, scope = .~. + `gestation(mo)` + `newborn(g)` + `weaning(mo)` + `weanmass(g)` + `litters/year`, test = "F")
+```
+
+``` {r}
+maxlife2 <- update(maxlife1, formula = .~. + `weanmass(g)`)
+summary(maxlife2)
+```
+
+``` {r}
+add1(maxlife2, scope = .~. + `gestation(mo)` + `newborn(g)` + `weaning(mo)` + `litters/year`, test = "F")
+```
+
+``` {r}
+maxlife3 <- update(maxlife2, formula = .~. + `weaning(mo)`)
+summary(maxlife3)
+```
+
+``` {r}
+add1(maxlife3, scope = .~. + `gestation(mo)` + `newborn(g)` + `litters/year`, test = "F")
+```
+
+``` {r}
+maxlife4 <- update(maxlife3, formula = .~. + `litters/year`)
+summary(maxlife4)
+```
+
+``` {r}
+add1(maxlife4, scope = .~. + `gestation(mo)` + `newborn(g)`, test = "F")
+```
+
+``` {r}
+maxlife5 <- update(maxlife4, formula = .~. + `gestation(mo)`)
+summary(maxlife5)
+```
+
+``` {r}
+add1(maxlife5, scope = .~. + `newborn(g)`, test = "F")
+```
+``` {r}
+library(MuMIn)
+maxlife <- lm(data = d_maxlife, `maxlife(mo)` ~ `mass(g)` + `weanmass(g)` + `weaning(mo)` + `litters/year` + 
+    `gestation(mo)`, na.action = "na.fail")
+maxlife_mods <- dredge(maxlife, beta = "none", m.lim = c(0, 4))
+maxlife_mods_list <- get.models(maxlife_mods, subset = TRUE)
+coef(maxlife_mods)
+```
+
+``` {r}
+maxlife_mods_avg <- summary(model.avg(maxlife_mods, subset = delta < 4, fit = TRUE))
+maxlife_mods_avg
+```
+
+``` {r}
+confint(maxlife_mods_avg)
+```
+
+``` {r}
+plot(maxlife_mods_avg, full = TRUE, intercept = FALSE)
+```
+
+``` {r}
+plot(maxlife_mods_avg, full = FALSE, intercept = FALSE)
+```
+
+``` {r}
+maxafr0 <- lm(data = d_maxafr, `AFR(mo)` ~ 1)
+summary(maxafr0)
+```
+``` {r}
+add1(maxafr0, scope = .~. + `gestation(mo)` + `newborn(g)` + `weaning(mo)` + `weanmass(g)` + `litters/year` + `mass(g)`, test = "F")
+```
+
+``` {r}
+maxafr1 <- update(maxafr0, formula = .~. + `litters/year`)
+summary(maxafr1)
+```
+
+``` {r}
+add1(maxafr1, scope = .~. + `gestation(mo)` + `newborn(g)` + `weaning(mo)` + `weanmass(g)` + `mass(g)`, test = "F")
+```
+
+``` {r}
+maxafr2 <- update(maxafr1, formula = .~. + `gestation(mo)`)
+summary(maxafr2)
+```
+
+``` {r}
+add1(maxafr2, scope = .~. + `newborn(g)` + `weaning(mo)` + `weanmass(g)` + `mass(g)`, test = "F")
+```
+
+``` {r}
+maxafr3 <- update(maxafr2, formula = .~. + `mass(g)`)
+summary(maxafr3)
+```
+
+``` {r}
+add1(maxafr3, scope = .~. + `newborn(g)` + `weaning(mo)` + `weanmass(g)`, test = "F")
+```
+
+``` {r}
+maxafr4 <- update(maxafr3, formula = .~. + `weaning(mo)`)
+summary(maxafr4)
+```
+
+``` {r}
+add1(maxafr4, scope = .~. + `newborn(g)` + `weanmass(g)`, test = "F")
+```
+
+``` {r}
+maxafr <- lm(data = d_maxafr, `AFR(mo)` ~ `litters/year` + `gestation(mo)` + `mass(g)` + `weaning(mo)`, na.action = "na.fail")
+maxafr_mods <- dredge(maxafr, beta = "none", m.lim = c(0, 4))
+maxafr_mods_list <- get.models(maxafr_mods, subset = TRUE)
+coef(maxafr_mods)
+```
+
+``` {r}
+maxafr_mods_avg <- summary(model.avg(maxafr_mods, subset = delta < 5, fit = TRUE)) # the lowest delta in this model is 4.88 so I had to increase the acceptable subset
+confint(maxafr_mods_avg)
+```
+
+``` {r}
+plot(maxafr_mods_avg, full = TRUE, intercept = FALSE)
+```
+
+``` {r}
+plot(maxafr_mods_avg, full = FALSE, intercept = FALSE)
+```
